@@ -17,6 +17,9 @@
 #define FILENAMESIZE 100
 #define MAXCONNECTIONS 32
 
+#include <iostream>
+#define debug(msg) (std::cout << msg << std::endl)
+
 int handle_connection(int sock);
 int parse_file(char * request, char * filename, int len);
 
@@ -72,7 +75,7 @@ int main(int argc, char * argv[]) {
   /* bind listening socket */
   binding = bind(listenSocket, (struct sockaddr *)&saddr, sizeof(saddr));
   if (binding < 0) {
-    fprintf(stderr, "Error binding the socker.\n");
+    fprintf(stderr, "Error binding the socket.\n");
     exit(-1);
   }
   /* start listening */
@@ -82,9 +85,11 @@ int main(int argc, char * argv[]) {
     exit(-1);
   }
   /* connection handling loop: wait to accept connection */
-  while (servSocket = accept(listenSocket, NULL, NULL) >= 0) {
+  while ((servSocket = accept(listenSocket, NULL, NULL)) >= 0) {
+    debug(listenSocket);
+    debug(servSocket);
 	/* handle connections */
-	rc = handle_connection(sock);
+	rc = handle_connection(servSocket);
     if (rc < 0) {
       fprintf(stderr, "Error handling connection");
       exit(-1);
@@ -96,10 +101,11 @@ int main(int argc, char * argv[]) {
 }
 
 int handle_connection(int sock) {
-  bool ok = false;
+  bool ok = true;
   char recvbuf[BUFSIZE];
-  int read;
+  int bytes_read;
   int fetch;
+  int sending;
   std::string req;
   char filename[FILENAMESIZE];
   char ch;
@@ -113,56 +119,75 @@ int handle_connection(int sock) {
 	"<html><body bgColor=black text=white>\n"		\
 	"<h2>404 FILE NOT FOUND</h2>\n"
 	"</body></html>\n";
-  
   /* first read loop -- get request and headers*/
   // First Error I have found
-  read = recv(sock, recvbuf, BUFSIZE - 1, 0);
-  if (read <= 0) {
+  
+  bytes_read = recv(sock, recvbuf, BUFSIZE - 1, 0);
+  debug(bytes_read);
+  if (bytes_read <= 0) {
     fprintf(stderr, "Error reading request.\n");
     return -1;
   }
-  while (read > 0) {
-    recvbuf[read] = '\0';
+  recvbuf[bytes_read] = '\0';
+  //while (bytes_read > 0) {
     req += std::string(recvbuf);
-    read = recv(sock, recvbuf, BUFSIZE - 1, 0);
-  }
+    debug(req);
+    //bytes_read = recv(sock, recvbuf, BUFSIZE - 1, 0);
+    //debug(bytes_read);
+    //recvbuf[bytes_read] = '\0';
+  //}
+  //debug("BUTTS");
   /* parse request to get file name */
   /* Assumption: this is a GET request and filename contains no spaces*/
   char * request = new char[req.size()];
   std::copy(req.begin(), req.end(), request);
   request[req.size()] = '\0';
+  //char * request = new char[strlen("GET /http_client.cc HTTP/1.0")];
+  //strcpy(request, "GET /http_client.cc HTTP/1.0");
   fetch = parse_file(request, filename, FILENAMESIZE);
   if (fetch < 0) {
     fprintf(stderr, "Error finding filename.\n");
-    delete [] request;
-    return -1;
+    ok = false;
   }
   /* try opening the file */
   FILE * reqfile = fopen(filename, "rb");
   if (reqfile == NULL) {
     fprintf(stderr, "Error opening %s.\n", filename);
-    delete [] request;
-    return -1;
+    ok = false;
   }
   /* send response */
   if (ok) {
 	/* send headers */
-	send(sock, ok_response_f, strlen(ok_response_f), 0);
+	sending = send(sock, ok_response_f, strlen(ok_response_f), 0);
+    if (sending <= 0) {
+      fprintf(stderr, "Error sending the OK response");
+    }
 	/* send file */
-	while ((ch, fgetc(reqfile)) != EOF) {
-      send(sock, &ch, strlen(&ch), 0);
+	//read in a file a chunk at a time.
+    char buf[BUFSIZE];
+    while (bytes_read = fread(&buf, 1, BUFSIZE - 1, reqfile)) {
+      if (bytes_read <= 0) {
+        break;
+      }
+      buf[bytes_read] = '\0';
+      sending = send(sock, &buf, strlen(buf), 0);
+      if (sending <= 0) {
+        fprintf(stderr, "Error sending file");
+        ok = false;
+        break;
+      }
     }
   } else {
-	// send error response
-    int sending = send(sock, notok_response, strlen(notok_response), 0);
+    //send error response
+    sending = send(sock, notok_response, strlen(notok_response), 0);
     if (sending <= 0) {
-      fprintf(stderr, "Error writing the not ok response.\n");
+      fprintf(stderr, "Error sending the not OK response.\n");
       ok = false;
     }
   }
     
   /* close socket and free space */
-
+  delete [] request;
   if (ok) {
 	return 0;
   } else {

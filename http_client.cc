@@ -116,8 +116,8 @@ int main(int argc, char * argv[]) {
   	free(req);
   	exit(-1);
   }
+  buf[read] = '\0';
   while (read > 0) {
-  	buf[read] = '\0';
     response += std::string(buf);
     position = response.find("\r\n\r\n", 0);
     if (position != std::string::npos) {
@@ -128,6 +128,7 @@ int main(int argc, char * argv[]) {
     	header += response;
     }
     read = recv(clientSocket, &buf, BUFSIZE - 1, 0);
+    buf[read] = '\0';
   }
   /* examine return code */   
   //Skip "HTTP/1.0"

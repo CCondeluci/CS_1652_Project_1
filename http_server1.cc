@@ -158,6 +158,7 @@ int handle_connection(int sock) {
   /* send response */
   if (ok) {
 	/* send headers */
+    // TODO: Set the length of content
 	sending = send(sock, ok_response_f, strlen(ok_response_f), 0);
     if (sending <= 0) {
       fprintf(stderr, "Error sending the OK response");

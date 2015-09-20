@@ -86,8 +86,8 @@ int main(int argc, char * argv[]) {
   }
   /* connection handling loop: wait to accept connection */
   while ((servSocket = accept(listenSocket, NULL, NULL)) >= 0) {
-    debug(listenSocket);
-    debug(servSocket);
+    //debug(listenSocket);
+    //debug(servSocket);
 	/* handle connections */
 	rc = handle_connection(servSocket);
     if (rc < 0) {
@@ -108,22 +108,22 @@ int handle_connection(int sock) {
   int sending;
   std::string req;
   char filename[FILENAMESIZE];
-  char ch;
-
+  
   const char * ok_response_f = "HTTP/1.0 200 OK\r\n"	\
     "Content-type: text/plain\r\n"			\
     "Content-length: %d \r\n\r\n";
- 
+  char ok_response[strlen(ok_response_f)];
+
   const char * notok_response = "HTTP/1.0 404 FILE NOT FOUND\r\n"	\
     "Content-type: text/html\r\n\r\n"			\
-	"<html><body bgColor=black text=white>\n"		\
-	"<h2>404 FILE NOT FOUND</h2>\n"
-	"</body></html>\n";
+	  "<html><body bgColor=black text=white>\n"		\
+	  "<h2>404 FILE NOT FOUND</h2>\n" \
+	  "</body></html>\n";
   /* first read loop -- get request and headers*/
   // First Error I have found
   
   bytes_read = recv(sock, recvbuf, BUFSIZE - 1, 0);
-  debug(bytes_read);
+  //debug(bytes_read);
   if (bytes_read <= 0) {
     fprintf(stderr, "Error reading request.\n");
     return -1;
@@ -155,29 +155,32 @@ int handle_connection(int sock) {
     fprintf(stderr, "Error opening %s.\n", filename);
     ok = false;
   }
+  char buf[BUFSIZE];
+  std::string file_string;
+  while (bytes_read = fread(&buf, 1, BUFSIZE - 1, reqfile)) {
+    if (bytes_read <= 0) {
+      break;
+    }
+    buf[bytes_read] = '\0';
+    file_string += std::string(buf);
+  }
   /* send response */
   if (ok) {
 	/* send headers */
     // TODO: Set the length of content
-	sending = send(sock, ok_response_f, strlen(ok_response_f), 0);
+    // sprinf of ok_response with filesize
+    // seg fault
+    sprintf(ok_response, ok_response_f, file_string.size());
+	  sending = send(sock, ok_response, strlen(ok_response_f), 0);
     if (sending <= 0) {
       fprintf(stderr, "Error sending the OK response");
     }
 	/* send file */
-	//read in a file a chunk at a time.
-    char buf[BUFSIZE];
-    while (bytes_read = fread(&buf, 1, BUFSIZE - 1, reqfile)) {
-      if (bytes_read <= 0) {
-        break;
-      }
-      buf[bytes_read] = '\0';
-      sending = send(sock, &buf, strlen(buf), 0);
+	  sending = send(sock, file_string.c_str(), file_string.size(), 0);
       if (sending <= 0) {
         fprintf(stderr, "Error sending file");
         ok = false;
-        break;
       }
-    }
   } else {
     //send error response
     sending = send(sock, notok_response, strlen(notok_response), 0);

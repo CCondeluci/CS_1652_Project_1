@@ -1,7 +1,8 @@
 #include <string.h>
 #include <stdio.h>
+#include <string>
 
-int parse_file(char * request, char * filename, int len) {
+int parse_file(const char * request, char * filename, int len) {
   int req_len = strlen(request);
   char * temp = new char[req_len + 1];
   char * temp2 = new char[req_len + 1];
@@ -30,8 +31,9 @@ int parse_file(char * request, char * filename, int len) {
 }
 
 int main() {
-	char * request = "GET /index.html HTTP/1.0 ";
+	const char * request = "GET /index.html HTTP/1.0 ";
+  std::string req = "GET /index.html HTTP/1.0";
 	char filename[100];
-  parse_file(request, filename, 100);
+  parse_file(req.c_str(), filename, 100);
   printf("%s\n", filename);	
 }

@@ -88,11 +88,10 @@ int main(int argc, char * argv[]) {
   while ((servSocket = accept(listenSocket, NULL, NULL)) >= 0) {
     //debug(listenSocket);
     //debug(servSocket);
-	/* handle connections */
-	rc = handle_connection(servSocket);
+	  /* handle connections */
+	  rc = handle_connection(servSocket);
     if (rc < 0) {
-      fprintf(stderr, "Error handling connection");
-      exit(-1);
+      fprintf(stderr, "Error handling connection\n");
     }
     close(servSocket);
   }
@@ -108,6 +107,8 @@ int handle_connection(int sock) {
   int sending;
   std::string req;
   char filename[FILENAMESIZE];
+  char buf[BUFSIZE];
+  std::string file_string;
   
   const char * ok_response_f = "HTTP/1.0 200 OK\r\n"	\
     "Content-type: text/plain\r\n"			\
@@ -120,10 +121,9 @@ int handle_connection(int sock) {
 	  "<h2>404 FILE NOT FOUND</h2>\n" \
 	  "</body></html>\n";
   /* first read loop -- get request and headers*/
-  // First Error I have found
-  
+  debug("Reading request");
   bytes_read = recv(sock, recvbuf, BUFSIZE - 1, 0);
-  //debug(bytes_read);
+  debug(bytes_read);
   if (bytes_read <= 0) {
     fprintf(stderr, "Error reading request.\n");
     return -1;
@@ -131,12 +131,12 @@ int handle_connection(int sock) {
   recvbuf[bytes_read] = '\0';
   //while (bytes_read > 0) {
     req += std::string(recvbuf);
-    debug(req);
+    debug(recvbuf);
     //bytes_read = recv(sock, recvbuf, BUFSIZE - 1, 0);
     //debug(bytes_read);
     //recvbuf[bytes_read] = '\0';
   //}
-  //debug("BUTTS");
+  debug("Finding Filename");
   /* parse request to get file name */
   /* Assumption: this is a GET request and filename contains no spaces*/
   char * request = new char[req.size()];
@@ -149,39 +149,52 @@ int handle_connection(int sock) {
     fprintf(stderr, "Error finding filename.\n");
     ok = false;
   }
+  debug("OPENING FILE");
+  if (!strcmp(filename, "")) {
+  	strcpy(filename, "index.html");
+  }
   /* try opening the file */
+  debug(filename);
   FILE * reqfile = fopen(filename, "rb");
   if (reqfile == NULL) {
     fprintf(stderr, "Error opening %s.\n", filename);
     ok = false;
   }
-  char buf[BUFSIZE];
-  std::string file_string;
-  while (bytes_read = fread(&buf, 1, BUFSIZE - 1, reqfile)) {
-    if (bytes_read <= 0) {
-      break;
+  debug("Reading File");
+  if (ok) {
+    while (bytes_read = fread(&buf, 1, BUFSIZE - 1, reqfile)) {
+      if (bytes_read <= 0) {
+        break;
+      }
+      buf[bytes_read] = '\0';
+      file_string += std::string(buf);
     }
-    buf[bytes_read] = '\0';
-    file_string += std::string(buf);
   }
   /* send response */
+  debug("Sending Response");
   if (ok) {
-	/* send headers */
-    // TODO: Set the length of content
-    // sprinf of ok_response with filesize
-    // seg fault
+	  /* send headers */
+    debug("Send OK header");
     sprintf(ok_response, ok_response_f, file_string.size());
-	  sending = send(sock, ok_response, strlen(ok_response_f), 0);
+	  //sending = send(sock, ok_response, strlen(ok_response_f), 0);
+    //if (sending <= 0) {
+      //fprintf(stderr, "Error sending the OK response");
+    //}
+	  /* send file */
+    //debug("Send file");
+	  //sending = send(sock, file_string.c_str(), file_string.size(), 0);
+    //if (sending <= 0) {
+      //fprintf(stderr, "Error sending file");
+      //ok = false;
+    //}
+    file_string = std::string(ok_response) + file_string;
+    sending = send(sock, file_string.c_str(), file_string.size(), 0);
     if (sending <= 0) {
-      fprintf(stderr, "Error sending the OK response");
+    	fprintf(stderr, "Error sending file");
+    	ok = false;
     }
-	/* send file */
-	  sending = send(sock, file_string.c_str(), file_string.size(), 0);
-      if (sending <= 0) {
-        fprintf(stderr, "Error sending file");
-        ok = false;
-      }
   } else {
+  	debug("Send error");
     //send error response
     sending = send(sock, notok_response, strlen(notok_response), 0);
     if (sending <= 0) {
@@ -193,9 +206,9 @@ int handle_connection(int sock) {
   /* close socket and free space */
   delete [] request;
   if (ok) {
-	return 0;
+	  return 0;
   } else {
-	return -1;
+	  return -1;
   }
 }
 
@@ -204,7 +217,7 @@ int parse_file(char * request, char * filename, int len) {
   char * temp = new char[req_len + 1];
   char * temp2 = new char[req_len + 1];
   strcpy(temp, request);
-  char * pos = strstr(temp, " HTTP/1.0");
+  char * pos = strstr(temp, " HTTP/1.");
   if (!pos || (strncmp(temp, "GET ", 4) != 0)) {
     delete [] temp;
     delete [] temp2;

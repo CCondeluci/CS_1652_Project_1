@@ -136,7 +136,6 @@ int handle_connection(int sock) {
     	break;
     }
     bytes_read = recv(sock, recvbuf, BUFSIZE - 1, 0);
-    debug(bytes_read);
     recvbuf[bytes_read] = '\0';
   }
   /* parse request to get file name */

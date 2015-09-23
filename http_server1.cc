@@ -2,7 +2,7 @@
 //9-22-15
 //Brian Lester, bld20@pitt.edu
 //Carmen Condeluci, crc73@pitt.edu
-//CS1652 Project 1 - HTTP Client
+//CS1652 Project 1 - HTTP Server1
 
 #include "minet_socket.h"
 

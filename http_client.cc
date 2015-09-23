@@ -1,6 +1,10 @@
-/* UNCOMMENT FOR MINET 
- * #include "minet_socket.h"
- */
+//University of Pittsburgh
+//9-22-15
+//Brian Lester, bld20@pitt.edu
+//Carmen Condeluci, crc73@pitt.edu
+//CS1652 Project 1 - HTTP Client
+
+#include "minet_socket.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -54,13 +58,13 @@ int main(int argc, char * argv[]) {
 
   /* initialize */
   if (toupper(*(argv[1])) == 'K') { 
-	/* UNCOMMENT FOR MINET 
-	 * minet_init(MINET_KERNEL);
-         */
+
+	 minet_init(MINET_KERNEL);
+   
   } else if (toupper(*(argv[1])) == 'U') { 
-	/* UNCOMMENT FOR MINET 
-	 * minet_init(MINET_USER);
-	 */
+	
+	 minet_init(MINET_USER);
+	 
   } else {
 	  fprintf(stderr, "First argument must be k or u\n");
 	  free(req);
@@ -68,12 +72,13 @@ int main(int argc, char * argv[]) {
   }
 
   /* make socket */
-  clientSocket = socket(AF_INET, SOCK_STREAM, 0);
+  clientSocket = minet_socket(SOCK_STREAM);
   if (clientSocket < 0) {
   	fprintf(stderr, "Error creating the Socket.\n");
   	free(req);
   	exit(-1);
   }
+
   /* get host IP address  */
   /* Hint: use gethostbyname() */
   host = gethostbyname(server_name);
@@ -89,37 +94,57 @@ int main(int argc, char * argv[]) {
   memcpy(&addr.sin_addr.s_addr, host->h_addr, host->h_length);
 
   /* connect to the server socket */
-  connection = connect(clientSocket, (struct sockaddr *)&addr, sizeof(addr));
+  connection = minet_connect(clientSocket, &addr);
   if (connect < 0) {
     fprintf(stdout, "Error connecting to Socket.\n");
     free(req);
     exit(-1);
   }
+
   /* send request message */
   sprintf(req, "GET %s HTTP/1.0\r\n\r\n", server_path);
   
-  sent = send(clientSocket, req, strlen(req), 0);
+  sent = minet_write(clientSocket, req, strlen(req));
   if (sent <= 0) {
     fprintf(stdout, "Error sending request.\n");
     free(req);
     exit(-1);
   }
+
   /* wait till socket can be read. */
   /* Hint: use select(), and ignore timeout for now. */
   FD_ZERO(&set);
   FD_SET(clientSocket, &set);
-  select(clientSocket+1, &set, NULL, NULL, NULL);
+  if (minet_select(clientSocket+1, &set, NULL, NULL, NULL) < 0) {
+
+    fprintf(stdout, "Error selecting socket.\n");
+    free(req);
+
+    minet_close(clientSocket);
+    minet_deinit();
+
+    exit(-1);
+
+  }
+
   /* first read loop -- read headers */
-  read = recv(clientSocket, &buf, BUFSIZE - 1, 0);
+  read = minet_read(clientSocket, buf, BUFSIZE - 1);
+
   if (read <= 0) {
   	fprintf(stderr, "Error reading from socket.\n");
   	free(req);
+
+    minet_close(clientSocket);
+    minet_deinit();
+
   	exit(-1);
   }
   buf[read] = '\0';
+
   while (read > 0) {
     response += std::string(buf);
     position = response.find("\r\n\r\n", 0);
+
     if (position != std::string::npos) {
     	header += response.substr(0,position);
     	response = response.substr(position+4);
@@ -127,9 +152,11 @@ int main(int argc, char * argv[]) {
     } else {
     	header += response;
     }
-    read = recv(clientSocket, &buf, BUFSIZE - 1, 0);
+
+    read = minet_read(clientSocket, buf, BUFSIZE - 1);
     buf[read] = '\0';
   }
+
   /* examine return code */   
   //Skip "HTTP/1.0"
   //remove the '\0'
@@ -137,6 +164,7 @@ int main(int argc, char * argv[]) {
   position2 = header.find(" ", position);
   resp_code = std::stoi(header.substr(position, position2));
   //std::cout << resp_code;
+
   // Normal reply has return code 200
   if (resp_code == 200) {
   	ok = true;
@@ -145,16 +173,20 @@ int main(int argc, char * argv[]) {
   std::cout << header << std::endl;
   /* second read loop -- print out the rest of the response: real web content */
   while (read > 0) {
-  	select(clientSocket+1, &set, NULL, NULL, NULL);
-  	read = recv(clientSocket, &buf, BUFSIZE - 1, 0);
+  	minet_select(clientSocket+1, &set, NULL, NULL, NULL);
+  	read = minet_read(clientSocket, buf, BUFSIZE - 1);
   	buf[read] = '\0';
     response += std::string(buf);
   }
+
   // print response
   std::cout << response << std::endl;
+
   /*close socket and deinitialize */
-  close(clientSocket);
+  minet_close(clientSocket);
+  minet_deinit();
   free(req);
+  
   if (ok) {
 	  return 0;
   } else {

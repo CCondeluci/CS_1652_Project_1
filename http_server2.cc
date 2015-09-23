@@ -1,6 +1,11 @@
-/* UNCOMMENT FOR MINET 
- * #include "minet_socket.h"
- */
+//University of Pittsburgh
+//9-22-15
+//Brian Lester, bld20@pitt.edu
+//Carmen Condeluci, crc73@pitt.edu
+//CS1652 Project 1 - HTTP Server2
+
+#include "minet_socket.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -41,58 +46,66 @@ int main(int argc, char * argv[]) {
     
   /* initialize */
   if (toupper(*(argv[1])) == 'K') { 
-	  /* UNCOMMENT FOR MINET 
-	  * minet_init(MINET_KERNEL);
-         */
+	  
+	  minet_init(MINET_KERNEL);
+         
   } else if (toupper(*(argv[1])) == 'U') { 
-	  /* UNCOMMENT FOR MINET 
-	  * minet_init(MINET_USER);
-	   */
+	
+	  minet_init(MINET_USER);
+	 
   } else {
 	  fprintf(stderr, "First argument must be k or u\n");
 	  exit(-1);
   }
 
   /* initialize and make socket */
-  int acceptSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  int acceptSocket = minet_socket(SOCK_STREAM);
   if (acceptSocket < 0) {
     fprintf(stderr, "Error creating the socket.\n");
     exit(-1);
   }
+
   /* set server address*/
   struct sockaddr_in saddr;
   memset(&saddr, 0, sizeof(saddr));
   saddr.sin_family = AF_INET;
   saddr.sin_addr.s_addr = INADDR_ANY;
   saddr.sin_port = htons(server_port);
+
   /* bind listening socket */
-  int bind_error = bind(acceptSocket, (struct sockaddr *)&saddr, sizeof(saddr));
+  int bind_error = minet_bind(acceptSocket, &saddr);
   if (bind_error < 0) {
   	fprintf(stderr, "Error binding the socket.\n");
   	exit(-1);
   }
+
   /* start listening */
-  int listening = listen(acceptSocket, MAXCONNECTIONS);
+  int listening = minet_listen(acceptSocket, MAXCONNECTIONS);
   if (listening < 0) {
   	fprintf(stderr, "Error listening.\n");
   	exit(-1);
   }
+
   /* connection handling loop: wait to accept connection */
   fd_set full;
   fd_set connected;
   timeval timeout;
+
   timeout.tv_sec = 0;
   timeout.tv_usec = 0;
+
   FD_ZERO(&full);
   FD_ZERO(&connected);
   FD_SET(acceptSocket, &full);
+
   // The largest file descriptor
   int max_sock = acceptSocket;
+
   while (1) {
 	  /* create read list */
 	  connected = full;
 	  /* do a select */
-	  int result = select(max_sock+1, &connected, 0, 0, 0);
+	  int result = minet_select(max_sock+1, &connected, 0, 0, 0);
 	  if (result > 0) {
 	    /* process sockets that are ready */
       for (int i = 0; i < max_sock + 1; i++) {
@@ -100,7 +113,7 @@ int main(int argc, char * argv[]) {
       	if (FD_ISSET(i, &connected)) {
           /* for the accept socket, add accepted connection to connections */
           if (i == acceptSocket) {
-          	int clientSocket = accept(acceptSocket, NULL, NULL);
+          	int clientSocket = minet_accept(acceptSocket, 0);
           	if (clientSocket < 0) {
               fprintf(stderr, "Error accepting sock.\n");
               continue;
@@ -148,14 +161,16 @@ int handle_connection(int sock) {
 	  "<html><body bgColor=black text=white>\n"		\
 	  "<h2>404 FILE NOT FOUND</h2>\n" \
 	  "</body></html>\n";
+
   /* first read loop -- get request and headers*/
 	// Read the Headers.
-  bytes_read = recv(sock, recvbuf, BUFSIZE - 1, 0);
+  bytes_read = minet_read(sock, recvbuf, BUFSIZE - 1);
   if (bytes_read <= 0) {
     fprintf(stderr, "Error reading request.\n");
     return -1;
   }
   recvbuf[bytes_read] = '\0';
+
   // Keep reading until "\r\n\r\n" is found.
   while (bytes_read > 0) {
     req += std::string(recvbuf);
@@ -164,9 +179,10 @@ int handle_connection(int sock) {
     	req = req.substr(0, pos);
     	break;
     }
-    bytes_read = recv(sock, recvbuf, BUFSIZE - 1, 0);
+    bytes_read = minet_read(sock, recvbuf, BUFSIZE - 1);
     recvbuf[bytes_read] = '\0';
   }
+
   /* parse request to get file name */
   /* Assumption: this is a GET request and filename contains no spaces*/
   fetch = parse_file(req.c_str(), filename, FILENAMESIZE);
@@ -177,12 +193,14 @@ int handle_connection(int sock) {
   if (!strcmp(filename, "")) {
   	strcpy(filename, "index.html");
   }
+
   /* try opening the file */
   FILE * reqfile = fopen(filename, "rb");
   if (reqfile == NULL) {
     fprintf(stderr, "Error opening file %s.\n", filename);
     ok = false;
   }
+
   // If no error has occured read the file.
   // Not called if the file is not found.
   if (ok) {
@@ -194,22 +212,26 @@ int handle_connection(int sock) {
       file_string += std::string(buf);
     }
   }
+
   /* send response */
   if (ok) {
+
 	  /* send headers */
 	  // Create response with the content length.
     sprintf(ok_response, ok_response_f, file_string.size());
+
     // Add the response and thcontent into a string
     file_string = std::string(ok_response) + file_string;
+
     // Send the string over the socket
-    sending = send(sock, file_string.c_str(), file_string.size(), 0);
+    sending = minet_write(sock, const_cast<char*>(file_string.c_str()), file_string.size());
     if (sending <= 0) {
     	fprintf(stderr, "Error sending file");
     	ok = false;
     }
   } else {
     //send error response
-    sending = send(sock, notok_response, strlen(notok_response), 0);
+    sending = minet_write(sock, const_cast<char*>(notok_response), strlen(notok_response));
     if (sending <= 0) {
       fprintf(stderr, "Error sending the not OK response.\n");
       ok = false;
